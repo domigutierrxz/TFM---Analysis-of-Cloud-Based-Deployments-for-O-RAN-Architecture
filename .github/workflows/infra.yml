@@ -53,5 +53,5 @@ jobs:
           echo "Verifying all of the playbooks in the ansible directory/"
           for playbook in ansible/azure-*.yml; do
             echo "Checking syntax for $playbook..."
-            ansible-playbook --syntax-check "$playbook"
+            ansible-playbook -i ansible/azure-inventories/azure-inventory.ini --syntax-check "$playbook"
           done
