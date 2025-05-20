@@ -14,6 +14,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: List files (debug)
+        run: ls -R
+
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -27,10 +30,10 @@ jobs:
         run: terraform init
         working-directory: terraform
 
-      - name: Terraform Validate # Checks syntax
+      - name: Terraform Validate
         run: terraform validate
         working-directory: terraform
 
-      - name: Terraform Plan # To view the plan without apply
+      - name: Terraform Plan
         run: terraform plan
         working-directory: terraform
