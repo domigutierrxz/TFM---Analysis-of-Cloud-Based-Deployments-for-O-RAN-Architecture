@@ -21,7 +21,7 @@ resource "azurerm_resource_group" "rg" {
 # Virtual Network
 resource "azurerm_virtual_network" "vnet" {
   name                = "o-ran-vnet"
-  address_space       = ["10.0.0.0/16"]  # Involves 10.0.1.X y 10.0.2.X
+  address_space       = ["10.0.0.0/16"] # Involves 10.0.1.X y 10.0.2.X
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 }
@@ -86,7 +86,7 @@ resource "azurerm_network_security_group" "nsg" {
     source_address_prefix      = var.subnet_cidr
     destination_address_prefix = "*"
   }
-  
+
 }
 
 # Associate NSG to subnets:
@@ -200,12 +200,12 @@ resource "azurerm_network_security_rule" "node_exporter_ns" {
 
 # Then, we can allocate them to our VMs (to each NIC)
 resource "azurerm_network_interface_security_group_association" "nsg_assoc_monitoring_vm1" {
-  network_interface_id      = azurerm_network_interface.vm1_nic.id 
+  network_interface_id      = azurerm_network_interface.vm1_nic.id
   network_security_group_id = azurerm_network_security_group.ric_nsg.id
 }
 
 resource "azurerm_network_interface_security_group_association" "nsg_assoc_monitoring_vm2" {
-  network_interface_id      = azurerm_network_interface.vm2_nic.id 
+  network_interface_id      = azurerm_network_interface.vm2_nic.id
   network_security_group_id = azurerm_network_security_group.ns_nsg.id
 }
 
