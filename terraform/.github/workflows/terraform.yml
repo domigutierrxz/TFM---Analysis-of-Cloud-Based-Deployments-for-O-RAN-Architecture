@@ -21,12 +21,16 @@ jobs:
 
       - name: Terraform Format Checking
         run: terraform fmt -check
+        working-directory: terraform
 
       - name: Terraform Init
         run: terraform init
+        working-directory: terraform
 
       - name: Terraform Validate # Checks syntax
         run: terraform validate
+        working-directory: terraform
 
       - name: Terraform Plan # To view the plan without apply
         run: terraform plan
+        working-directory: terraform
