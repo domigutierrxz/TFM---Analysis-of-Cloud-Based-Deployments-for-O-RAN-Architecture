@@ -1,0 +1,54 @@
+- name: Base configuration for O-RAN
+  hosts: all
+  become: yes
+  tasks:
+    - name: Update packages
+      apt:
+        update_cache: yes
+        
+    - name: Install basic and necessary tools
+      apt:
+        name:
+          - htop
+          - vim
+          - git
+        state: present
+        install_recommends: no
+        
+    - name: Configure swap file to optimize memory use
+      block:
+        - name: Crear archivo swap
+          command: fallocate -l 2G /swapfile
+          args:
+            creates: /swapfile
+            
+        - name: Set permissions to swap file
+          file:
+            path: /swapfile
+            mode: '0600'
+            owner: root
+            group: root
+
+        - name: Format swap (only if not already mounted)
+          command: mkswap /swapfile
+          when: ansible_swaptotal_mb == 0
+
+        - name: Activate swap
+          command: swapon /swapfile
+          when: ansible_swaptotal_mb == 0
+          
+        - name: Make permanent swap
+          lineinfile:
+            path: /etc/fstab
+            line: "/swapfile none swap sw 0 0"
+            state: present
+            
+    - name: Optimizing sysctl for low memory environments
+      sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      with_items:
+        - { key: "vm.swappiness", value: "10" }
+        - { key: "vm.vfs_cache_pressure", value: "50" }

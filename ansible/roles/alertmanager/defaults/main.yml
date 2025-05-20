@@ -1,0 +1,11 @@
+# Alert manager version by default:
+alertmanager_version: "0.27.0"
+
+# Network configuration:
+alertmanager_web_listen_address: "0.0.0.0:9093"
+
+alertmanager_data_retention: "120h" # Data retention
+
+# Telegram configuration (where our alerts will be sent to)
+telegram_bot_token: "7216285478:AAHzQiv3euodVnFPKgpIRQDpdmkVst4IRf0"
+telegram_chat_id: 1838342892

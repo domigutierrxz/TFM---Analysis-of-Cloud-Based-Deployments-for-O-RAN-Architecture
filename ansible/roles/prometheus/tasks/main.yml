@@ -1,0 +1,115 @@
+- name: Create prometheus user
+  user:
+    name: prometheus
+    shell: /usr/sbin/nologin
+    create_home: no
+
+- name: Create required directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: prometheus
+    group: prometheus
+    mode: '0755'
+  loop:
+    - /etc/prometheus
+    - /var/lib/prometheus
+
+- name: Download Prometheus
+  get_url:
+    url: https://github.com/prometheus/prometheus/releases/download/v2.52.0/prometheus-2.52.0.linux-amd64.tar.gz
+    dest: /tmp/prometheus.tar.gz
+
+- name: Extract Prometheus
+  unarchive:
+    src: /tmp/prometheus.tar.gz
+    dest: /tmp
+    remote_src: yes
+
+- name: Move Prometheus binaries
+  copy:
+    remote_src: yes
+    src: /tmp/prometheus-2.52.0.linux-amd64/prometheus
+    dest: /usr/local/bin/prometheus
+    mode: '0755'
+    owner: prometheus
+    group: prometheus
+
+- name: Move Promtool binary
+  copy:
+    remote_src: yes
+    src: /tmp/prometheus-2.52.0.linux-amd64/promtool
+    dest: /usr/local/bin/promtool
+    mode: '0755'
+    owner: prometheus
+    group: prometheus
+
+- name: Copy consoles and console_libraries
+  copy:
+    remote_src: yes
+    src: "/tmp/prometheus-2.52.0.linux-amd64/{{ item }}"
+    dest: "/etc/prometheus/{{ item }}"
+    owner: prometheus
+    group: prometheus
+    mode: '0755'
+  loop:
+    - consoles
+    - console_libraries
+
+- name: Copy Prometheus config file
+  template:
+    src: prometheus.yml.j2
+    dest: /etc/prometheus/prometheus.yml
+    owner: prometheus
+    group: prometheus
+    mode: '0644'
+  notify: Restart prometheus
+
+- name: Create systemd service for Prometheus
+  copy:
+    dest: /etc/systemd/system/prometheus.service
+    content: |
+      [Unit]
+      Description=Prometheus Monitoring
+      Wants=network-online.target
+      After=network-online.target
+      
+      [Service]
+      User=prometheus
+      Group=prometheus
+      Type=simple
+      ExecStart=/usr/local/bin/prometheus \
+        --config.file=/etc/prometheus/prometheus.yml \
+        --storage.tsdb.path=/var/lib/prometheus \
+        --web.console.templates=/etc/prometheus/consoles \
+        --web.console.libraries=/etc/prometheus/console_libraries \
+        --web.listen-address={{ prometheus_web_listen_address }} \
+        --storage.tsdb.retention.time={{ prometheus_storage_retention }}
+      ExecReload=/bin/kill -HUP $MAINPID
+      Restart=on-failure
+      RestartSec=5s
+      NoNewPrivileges=true
+      
+      [Install]
+      WantedBy=multi-user.target
+  notify: Restart prometheus
+
+- name: Copy alert rules to Prometheus
+  copy:
+    src: alert.rules.yml
+    dest: /etc/prometheus/alert.rules.yml
+    owner: prometheus
+    group: prometheus
+    mode: '0644'
+  notify: Restart prometheus
+
+
+- name: Ensure prometheus is running and enabled
+  systemd:
+    name: prometheus
+    state: started
+    enabled: yes
+
+- name: Reload systemd
+  systemd:
+    daemon_reload: yes

@@ -1,0 +1,95 @@
+- name: Create alertmanager user
+  user:
+    name: alertmanager
+    shell: /usr/sbin/nologin
+    create_home: no
+
+- name: Create required directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: alertmanager
+    group: alertmanager
+    mode: '0755'
+  loop:
+    - /etc/alertmanager
+    - /var/lib/alertmanager
+
+- name: Download AlertManager
+  get_url:
+    url: "https://github.com/prometheus/alertmanager/releases/download/v{{ alertmanager_version }}/alertmanager-{{ alertmanager_version }}.linux-amd64.tar.gz"
+    dest: /tmp/alertmanager.tar.gz
+
+- name: Extract AlertManager
+  unarchive:
+    src: /tmp/alertmanager.tar.gz
+    dest: /tmp
+    remote_src: yes
+
+- name: Move AlertManager binary
+  copy:
+    remote_src: yes
+    src: "/tmp/alertmanager-{{ alertmanager_version }}.linux-amd64/alertmanager"
+    dest: /usr/local/bin/alertmanager
+    mode: '0755'
+    owner: alertmanager
+    group: alertmanager
+
+- name: Move amtool binary
+  copy:
+    remote_src: yes
+    src: "/tmp/alertmanager-{{ alertmanager_version }}.linux-amd64/amtool"
+    dest: /usr/local/bin/amtool
+    mode: '0755'
+    owner: alertmanager
+    group: alertmanager
+
+- name: Create AlertManager configuration
+  template:
+    src: alertmanager.yml.j2
+    dest: /etc/alertmanager/alertmanager.yml
+    owner: alertmanager
+    group: alertmanager
+    mode: '0644'
+  notify: Restart alertmanager
+
+- name: Create systemd service for AlertManager
+  copy:
+    dest: /etc/systemd/system/alertmanager.service
+    content: |
+      [Unit]
+      Description=AlertManager Service
+      Wants=network-online.target
+      After=network-online.target
+      
+      [Service]
+      User=alertmanager
+      Group=alertmanager
+      Type=simple
+      ExecStart=/usr/local/bin/alertmanager \
+        --config.file=/etc/alertmanager/alertmanager.yml \
+        --storage.path=/var/lib/alertmanager \
+        --web.listen-address={{ alertmanager_web_listen_address }} \
+        --data.retention={{ alertmanager_data_retention }}
+      Restart=on-failure
+      RestartSec=5s
+      NoNewPrivileges=true
+      
+      [Install]
+      WantedBy=multi-user.target
+  notify:
+    - Restart alertmanager
+
+- name: Ensure alertmanager is running and enabled
+  systemd:
+    name: alertmanager
+    state: started
+    enabled: yes
+
+- name: Clean up extraction files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /tmp/alertmanager.tar.gz
+    - "/tmp/alertmanager-{{ alertmanager_version }}.linux-amd64"

@@ -1,0 +1,249 @@
+- name: Configure and deploy ns-O-RAN on RAN node
+  hosts: ns_oran_node
+  become: yes
+  vars:
+    base_dir: /opt/ns-o-ran
+    e2sim_repo: https://github.com/wineslab/ns-o-ran-e2-sim
+    ns3_repo: https://github.com/wineslab/ns-o-ran-ns3-mmwave
+    oran_module_repo: https://github.com/o-ran-sc/sim-ns3-o-ran-e2
+    e2term_ip_file: /opt/e2term_ip.txt
+    e2term_port: 36422
+    logs_dir: /opt/ran_logs
+    build_timeout: 3600 # 1 hour for large compilation times
+
+  tasks:
+    - name: Ensure base directory exists
+      file:
+        path: "{{ base_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Install dependencies
+      apt:
+        name:
+          - build-essential
+          - git
+          - cmake
+          - libsctp-dev
+          - autoconf
+          - automake
+          - libtool
+          - bison
+          - flex
+          - libboost-all-dev
+          - g++
+          - python3
+          - libxml2-dev
+          - python3-pip
+        state: present
+        update_cache: yes
+
+    # Avoid recompiling things
+    - name: Check if e2sim is already built
+      stat:
+        path: "{{ base_dir }}/e2sim_built.flag"
+      register: e2sim_built
+
+    - name: Clone e2sim repository
+      git:
+        repo: "{{ e2sim_repo }}"
+        dest: "{{ base_dir }}/oran-e2sim"
+        version: develop
+      when: not e2sim_built.stat.exists
+      register: git_e2sim
+
+    - name: Build e2sim with LOG_LEVEL=3
+      shell: |
+        mkdir -p build
+        ./build_e2sim.sh 3
+      args:
+        chdir: "{{ base_dir }}/oran-e2sim/e2sim"
+      environment:
+        LOG_LEVEL: "3"
+      when: not e2sim_built.stat.exists and (git_e2sim is changed or not e2sim_built.stat.exists)
+      async: "{{ build_timeout }}"
+      poll: 30  # Check every 30 seconds
+
+    - name: Create e2sim built flag
+      file:
+        path: "{{ base_dir }}/e2sim_built.flag"
+        state: touch
+        mode: '0644'
+      when: not e2sim_built.stat.exists
+
+    # Check if NS3 is already cloned
+    - name: Check if NS3 is already cloned
+      stat:
+        path: "{{ base_dir }}/ns-3-mmwave-oran"
+      register: ns3_cloned
+
+    - name: Clone ns3-mmwave repository
+      git:
+        repo: "{{ ns3_repo }}"
+        dest: "{{ base_dir }}/ns-3-mmwave-oran"
+        version: master
+      when: not ns3_cloned.stat.exists
+      register: git_ns3
+
+    - name: Check if ORAN module is already cloned
+      stat:
+        path: "{{ base_dir }}/ns-3-mmwave-oran/contrib/oran-interface"
+      register: oran_module_cloned
+
+    - name: Clone oran-interface module inside contrib/
+      git:
+        repo: "{{ oran_module_repo }}"
+        dest: "{{ base_dir }}/ns-3-mmwave-oran/contrib/oran-interface"
+        version: master
+      when: not oran_module_cloned.stat.exists or git_ns3 is changed
+
+    - name: Change ownership of ns-3 directory to current user
+      file:
+        path: "{{ base_dir }}/ns-3-mmwave-oran"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        recurse: yes
+
+    - name: Create logs directory
+      file:
+        path: "{{ logs_dir }}"
+        state: directory
+        mode: '0755'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    # Get E2Term IP
+    - name: Copy E2Term IP from RIC node
+      ansible.builtin.slurp:
+        src: "{{ e2term_ip_file }}"
+      delegate_to: ric-host
+      register: e2term_ip_encoded
+      ignore_errors: yes
+
+    - name: Set E2Term IP fact from file
+      set_fact:
+        e2term_ip: "{{ e2term_ip_encoded.content | b64decode | trim }}"
+      when: e2term_ip_encoded is defined and e2term_ip_encoded.content is defined
+
+    - name: Set E2Term IP from hostvars if file fetch failed
+      set_fact:
+        e2term_ip: "{{ hostvars['ric-host']['e2term_ip'] | default('0.0.0.0') }}"
+      when: e2term_ip_encoded is not defined or e2term_ip_encoded.content is not defined
+
+    - name: Show E2Term IP
+      debug:
+        msg: "E2Term IP is: {{ e2term_ip }}"
+
+    - name: Store E2Term IP locally
+      copy:
+        content: "{{ e2term_ip }}"
+        dest: "{{ e2term_ip_file }}"
+        mode: '0644'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    # Automation script for NS-3
+    - name: Create NS-3 configuration script
+      copy:
+        dest: "{{ base_dir }}/configure-ns3.sh"
+        content: |
+          #!/bin/bash
+          cd {{ base_dir }}/ns-3-mmwave-oran
+          ./ns3 configure --enable-examples --enable-tests
+          echo "Configuration completed. Starting build..."
+          ./ns3 build
+          echo "Build completed."
+        mode: '0755'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    # Script to run scenario-zerio
+    - name: Create scenario-zero runner script
+      copy:
+        dest: "{{ base_dir }}/run-scenario-zero.sh"
+        content: |
+          #!/bin/bash
+          cd {{ base_dir }}/ns-3-mmwave-oran
+          E2TERM_IP=$(cat {{ e2term_ip_file }})
+          echo "Running scenario-zero with E2Term IP: $E2TERM_IP"
+          ./ns3 run "scratch/scenario-zero.cc --e2termIp=$E2TERM_IP --e2termPort={{ e2term_port }}" 2>&1 | tee {{ logs_dir }}/scenario-zero-$(date +%Y%m%d-%H%M%S).log
+        mode: '0755'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    # Instructions for the configuration of ns-O-RAN
+    - name: Create manual steps file
+      copy:
+        dest: "/home/{{ ansible_user }}/ns3-manual-steps.md"
+        content: |
+          # Manual Steps for NS-O-RAN Configuration in Azure
+
+          The environment has been prepared with all necessary components. Here are the steps to complete the configuration:
+
+          ## Automated Option
+          
+          For convenience, we've created scripts to help with configuration and running:
+          
+          1. Configure and build NS-3 (this might take 30+ minutes):
+             ```
+             {{ base_dir }}/configure-ns3.sh
+             ```
+          
+          2. Run the scenario-zero example:
+             ```
+             {{ base_dir }}/run-scenario-zero.sh
+             ```
+
+          ## Manual Step-by-Step Option
+          
+          If you prefer to run commands manually:
+          
+          1. Navigate to the NS-3 directory:
+             ```
+             cd {{ base_dir }}/ns-3-mmwave-oran
+             ```
+          
+          2. Configure NS-3:
+             ```
+             ./ns3 configure --enable-examples --enable-tests
+             ```
+          
+          3. Build NS-3 (this might take 30+ minutes):
+             ```
+             ./ns3 build
+             ```
+          
+          4. Run the scenario-zero example:
+             ```
+             ./ns3 run "scratch/scenario-zero.cc --e2termIp={{ e2term_ip }} --e2termPort={{ e2term_port }}"
+             ```
+
+          ## Debugging
+
+          - The E2Term IP address being used is: {{ e2term_ip }}
+          - Logs will be stored in: {{ logs_dir }}
+          
+          ## Expected Behavior
+          
+          When running correctly, you should see these messages exchanged between ns-3 and RIC:
+          
+          1. E2 Setup Request (ns-O-RAN to E2 Term on RIC)
+          2. E2 Setup Response (E2 Term on RIC to ns-O-RAN)
+          3. E2 Subscription Request (xApp to ns-O-RAN through E2 Term)
+          4. E2 Subscription Response (ns-O-RAN to xApp through E2 Term)
+          5. E2SM RIC Indication Message (ns-O-RAN to xApp through E2 Term)
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+
+    - name: Show completion and next steps
+      debug:
+        msg: |
+          The environment is prepared for NS-O-RAN in Azure.
+          
+          Due to the long build times for NS-3, we've created convenience scripts:
+          - {{ base_dir }}/configure-ns3.sh - Configure and build NS-3
+          - {{ base_dir }}/run-scenario-zero.sh - Run the scenario-zero example
+          
+          Please see /home/{{ ansible_user }}/ns3-manual-steps.md for detailed instructions.

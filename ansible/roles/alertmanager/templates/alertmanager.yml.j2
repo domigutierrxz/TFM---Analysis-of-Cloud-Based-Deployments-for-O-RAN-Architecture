@@ -1,0 +1,31 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: 'telegram'
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 1h
+
+receivers:
+  - name: 'telegram'
+    telegram_configs:
+      - bot_token: "{{ telegram_bot_token }}"
+        chat_id: {{ telegram_chat_id }}
+        parse_mode: ""
+        message: |-
+         🚨 {{ '{{' }} .CommonLabels.alertname {{ '}}' }}
+         Severity: {{ '{{' }} .CommonLabels.severity {{ '}}' }}
+         {{ '{{' }} if .CommonAnnotations.summary }}Summary: {{ '{{' }} .CommonAnnotations.summary {{ '}}' }}{{ '{{' }} end }}
+         {{ '{{' }} if .CommonAnnotations.description }}Description: {{ '{{' }} .CommonAnnotations.description {{ '}}' }}{{ '{{' }} end }}
+         {{ '{{' }} range .Alerts }}
+         Instance: {{ '{{' }} .Labels.instance {{ '}}' }}
+         Machine: {{ '{{' }} .Labels.vm_name {{ '}}' }}
+         {{ '{{' }} end }}
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']

@@ -1,0 +1,63 @@
+groups:
+- name: node_alerts
+  rules:
+  # CPU alerts
+  - alert: HighCPULoad
+    expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High CPU Load ({{ $labels.vm_name }})"
+      description: "CPU load is above 80% for more than 5 minutes. Current value: {{ $value | printf \"%.2f\" }}%"
+  
+  - alert: CriticalCPULoad
+    expr: 100 - (avg by(vm_name) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Critical CPU Load ({{ $labels.vm_name }})"
+      description: "CPU load is above 90% for more than 2 minutes. Current value: {{ $value | printf \"%.2f\" }}%"
+
+  # Memory alerts
+  - alert: HighMemoryUsage
+    expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High Memory Usage ({{ $labels.vm_name }})"
+      description: "Memory usage is above 85% for more than 5 minutes. Current value: {{ $value | printf \"%.2f\" }}%"
+  
+  - alert: CriticalMemoryUsage
+    expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 95
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Critical Memory Usage ({{ $labels.vm_name }})"
+      description: "Memory usage is above 95% for more than 2 minutes. Current value: {{ $value | printf \"%.2f\" }}%"
+
+  # Disk alerts
+  - alert: HighDiskUsage
+    expr: (node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs"} - node_filesystem_free_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs"}) / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs"} * 100 > 85
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High Disk Usage ({{ $labels.vm_name }})"
+      description: "Disk usage on {{ $labels.mountpoint }} is above 85%. Current value: {{ $value | printf \"%.2f\" }}%"
+  
+  - alert: CriticalDiskUsage
+    expr: (node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs"} - node_filesystem_free_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs"}) / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs"} * 100 > 95
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Critical Disk Usage ({{ $labels.vm_name }})"
+      description: "Disk usage on {{ $labels.mountpoint }} is above 95%. Current value: {{ $value | printf \"%.2f\" }}%"
+
+  # Disk will fill in 24h
+  - alert: DiskFillsUp
+    expr: predict_linea

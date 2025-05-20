@@ -1,0 +1,55 @@
+- name: Creating node_exporter user
+  user:
+    name: node_exporter
+    shell: /usr/sbin/nologin
+    create_home: no
+
+- name: Downloading node_exporter binary from GitHub
+  get_url:
+    url: https://github.com/prometheus/node_exporter/releases/download/v1.8.1/node_exporter-1.8.1.linux-amd64.tar.gz
+    dest: /tmp/node_exporter.tar.gz
+    mode: '0644'
+
+- name: Extracting node_exporter binary
+  unarchive:
+    src: /tmp/node_exporter.tar.gz
+    dest: /opt/
+    remote_src: yes
+
+- name: Moving node_exporter binary to /usr/local/bin
+  copy:
+    remote_src: yes
+    src: /opt/node_exporter-1.8.1.linux-amd64/node_exporter
+    dest: /usr/local/bin/node_exporter
+    mode: '0755'
+    owner: node_exporter
+    group: node_exporter
+
+- name: Creating systemd service for node_exporter
+  copy:
+    dest: /etc/systemd/system/node_exporter.service
+    content: |
+      [Unit]
+      Description=Node Exporter
+      After=network.target
+
+      [Service]
+      User=node_exporter
+      Group=node_exporter
+      Type=simple
+      ExecStart=/usr/local/bin/node_exporter --collector.disable-defaults --collector.cpu --collector.meminfo --collector.loadavg --collector.uname --collector.filesystem
+
+      [Install]
+      WantedBy=multi-user.target
+  notify:
+    - Start node_exporter
+
+- name: Ensure node_exporter is running and enabled
+  systemd:
+    name: node_exporter
+    state: started
+    enabled: yes
+
+- name: Reload systemd
+  systemd:
+    daemon_reload: yes

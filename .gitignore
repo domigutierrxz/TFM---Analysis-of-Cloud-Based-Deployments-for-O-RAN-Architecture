@@ -1,0 +1,20 @@
+# DOCUMENTS
+tfm-azure.docx
+
+# TERRAFORM
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/*.tfvars
+
+# ANSIBLE
+estudio-setup.txt
+zzz-old-oci/
+group_vars/all.yml
+
+# Others
+*.bak
+*.key
+ansible/vault.yml
+ansible/secret_*.yml
+

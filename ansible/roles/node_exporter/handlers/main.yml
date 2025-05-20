@@ -1,0 +1,10 @@
+- name: Start node_exporter
+  systemd:
+    name: node_exporter
+    state: started
+    enabled: yes
+
+- name: Restart node_exporter
+  systemd:
+    name: node_exporter
+    state: restarted

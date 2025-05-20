@@ -1,0 +1,117 @@
+- name: Deploy Near-RT RIC Basic
+  hosts: ric_node
+  become: yes
+  vars:
+    ric_scripts_dir: /opt/colosseum-near-rt-ric/setup-scripts
+    e2term_output_file: /opt/e2term_ip.txt
+  
+  tasks:
+    - name: Ensure setup scripts directory exists
+      stat:
+        path: "{{ ric_scripts_dir }}"
+      register: ric_dir
+    
+    - name: Fail if RIC setup directory is missing
+      fail:
+        msg: "The RIC setup directory does not exist at {{ ric_scripts_dir }}."
+      when: not ric_dir.stat.exists
+    
+    - name: Import Docker images (if script exists)
+      stat:
+        path: "{{ ric_scripts_dir }}/import-wines-images.sh"
+      register: import_script
+    
+    - name: Run image import script
+      command: ./import-wines-images.sh
+      args:
+        chdir: "{{ ric_scripts_dir }}"
+      when: import_script.stat.exists
+      register: import_result
+      failed_when: import_result.rc != 0
+      environment:
+        DOCKER_OPTS: "--config /etc/docker"
+    
+    - name: Launch the RIC (if script exists)
+      stat:
+        path: "{{ ric_scripts_dir }}/setup-ric-bronze.sh"
+      register: setup_script
+    
+    - name: Run RIC setup script
+      command: ./setup-ric-bronze.sh
+      args:
+        chdir: "{{ ric_scripts_dir }}"
+      when: setup_script.stat.exists
+      register: setup_result
+      failed_when: setup_result.rc != 0
+      environment:
+        DOCKER_OPTS: "--config /etc/docker"
+    
+    - name: Get E2Term container IP address
+      shell: docker inspect -f {% raw %}'{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}'{% endraw %} e2term
+      register: e2term_ip
+      changed_when: false
+      retries: 3
+      delay: 10
+      until: e2term_ip.rc == 0
+    
+    - name: Save E2Term IP as fact
+      set_fact:
+        e2term_ip: "{{ e2term_ip.stdout }}"
+    
+    - name: Show E2Term IP
+      debug:
+        msg: "E2Term container IP is: {{ e2term_ip }}"
+    
+    - name: Write E2Term IP to file
+      copy:
+        content: "{{ e2term_ip }}"
+        dest: "{{ e2term_output_file }}"
+        mode: '0644'
+
+    # Azure works different in terms of getting the extern/private IP
+    - name: Get internal IP address in Azure
+      shell: ip addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}'
+      register: azure_internal_ip
+      changed_when: false
+      ignore_errors: yes
+
+    # Fallback in case eth0 is not the right interface
+    - name: Get internal IP (alternative method)
+      shell: hostname -I | awk '{print $1}'
+      register: alternative_ip
+      changed_when: false
+      when: azure_internal_ip.rc != 0 or azure_internal_ip.stdout == ""
+
+    - name: Set internal IP fact
+      set_fact:
+        ric_internal_ip: "{{ azure_internal_ip.stdout }}"
+      when: azure_internal_ip.rc == 0 and azure_internal_ip.stdout != ""
+
+    - name: Set internal IP fact (alternative)
+      set_fact:
+        ric_internal_ip: "{{ alternative_ip.stdout }}"
+      when: azure_internal_ip.rc != 0 or azure_internal_ip.stdout == ""
+
+    - name: Show internal IP of RIC VM
+      debug:
+        msg: "Internal IP of RIC VM in Azure is: {{ ric_internal_ip }}"
+
+    # Get Public IP using Azure metadata
+    - name: Get Azure public IP
+      uri:
+        url: http://169.254.169.254/metadata/instance/network/interface/0/ipv4/ipAddress/0/publicIpAddress?api-version=2019-06-01&format=text
+        headers:
+          Metadata: true
+        return_content: yes
+      register: azure_public_ip
+      changed_when: false
+      ignore_errors: yes
+
+    - name: Set public IP fact
+      set_fact:
+        ric_public_ip: "{{ azure_public_ip.content }}"
+      when: azure_public_ip is success and azure_public_ip.content != ""
+
+    - name: Show public IP of RIC VM
+      debug:
+        msg: "Public IP of RIC VM in Azure is: {{ ric_public_ip | default('Not available') }}"

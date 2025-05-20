@@ -1,0 +1,26 @@
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['localhost:9093']  
+
+rule_files:
+  - /etc/prometheus/alert.rules.yml
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+  
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets: ['10.0.1.4:9100']
+        labels:
+          vm_name: VirtualMachine1
+      - targets: ['10.0.1.5:9100']
+        labels:
+          vm_name: VirtualMachine2

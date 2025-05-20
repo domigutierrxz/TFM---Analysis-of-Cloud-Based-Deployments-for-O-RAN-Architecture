@@ -1,0 +1,13 @@
+- name: Install Node Exporter on all hosts
+  hosts: node_exporter
+  become: yes
+  roles:
+    - node_exporter
+
+- name: Install Prometheus, Grafana and Alertmanager on control node VM1
+  hosts: prometheus_grafana
+  become: yes
+  roles:
+    - prometheus
+    - grafana
+    - alertmanager
