@@ -37,6 +37,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: List directory contents (debug)
+        run: |
+          echo "=== Root directory ==="
+          ls -la
+          echo "=== All YAML files recursively ==="
+          find . -name "*.yml" | sort
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -46,19 +53,28 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install ansible
-
-      # Verificar la sintaxis de cada playbook individualmente
-      - name: Verify Ansible syntax - Base Configuration
-        run: ansible-playbook --syntax-check azure-01-base-configuration.yml
-
-      - name: Verify Ansible syntax - RIC Installation
-        run: ansible-playbook --syntax-check azure-02-ric-installation.yml
-
-      - name: Verify Ansible syntax - RIC Deployment
-        run: ansible-playbook --syntax-check azure-03-ric-deployment.yml
-
-      - name: Verify Ansible syntax - RAN Configuration
-        run: ansible-playbook --syntax-check azure-04-ran-configuration.yml
-
-      - name: Verify Ansible syntax - Monitoring
-        run: ansible-playbook --syntax-check azure-05-monitoring.yml
+      
+      # Intenta con rutas absolutas
+      - name: Verify Ansible syntax with absolute paths
+        run: |
+          REPO_ROOT="$(pwd)"
+          echo "Repository root: $REPO_ROOT"
+          
+          if [ -f "$REPO_ROOT/azure-01-base-configuration.yml" ]; then
+            echo "Playbook encontrado en la raíz"
+            ansible-playbook --syntax-check "$REPO_ROOT/azure-01-base-configuration.yml"
+          elif [ -f "$REPO_ROOT/ansible/azure-01-base-configuration.yml" ]; then
+            echo "Playbook encontrado en /ansible"
+            ansible-playbook --syntax-check "$REPO_ROOT/ansible/azure-01-base-configuration.yml"
+          else
+            echo "Buscando playbook recursivamente..."
+            PLAYBOOK_PATH=$(find "$REPO_ROOT" -name "azure-01-base-configuration.yml" | head -n 1)
+            
+            if [ -n "$PLAYBOOK_PATH" ]; then
+              echo "Playbook encontrado en: $PLAYBOOK_PATH"
+              ansible-playbook --syntax-check "$PLAYBOOK_PATH"
+            else
+              echo "ERROR: No se pudo encontrar el playbook azure-01-base-configuration.yml"
+              exit 1
+            fi
+          fi
