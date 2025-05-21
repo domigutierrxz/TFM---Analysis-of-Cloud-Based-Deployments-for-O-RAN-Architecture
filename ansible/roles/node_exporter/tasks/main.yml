@@ -37,7 +37,7 @@
       User=node_exporter
       Group=node_exporter
       Type=simple
-      ExecStart=/usr/local/bin/node_exporter --collector.disable-defaults --collector.cpu --collector.meminfo --collector.loadavg --collector.uname --collector.filesystem
+      ExecStart=/usr/local/bin/node_exporter --collector.disable-defaults --collector.cpu --collector.meminfo --collector.loadavg --collector.uname --collector.filesystem --collector.netdev --collector.netclass
 
       [Install]
       WantedBy=multi-user.target
