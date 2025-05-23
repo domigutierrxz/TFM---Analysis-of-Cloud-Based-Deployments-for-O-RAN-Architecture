@@ -59,27 +59,6 @@
         force: yes
       tags: [ric, clone]
     
-    - name: Check if docker-compose.yaml exists
-      stat:
-        path: /opt/colosseum-near-rt-ric/setup-scripts/docker-compose.yaml
-      register: compose_file
-      tags: [ric, docker]
-    
-    - name: Find docker-compose.yaml location if not in expected path
-      find:
-        paths: /opt/colosseum-near-rt-ric
-        patterns: "docker-compose*.y*ml"
-        recurse: yes
-      register: compose_file_search
-      when: not compose_file.stat.exists
-      tags: [ric, docker]
-    
-    - name: Display found docker-compose file
-      debug:
-        msg: "Found docker-compose files: {{ compose_file_search.files | map(attribute='path') | list }}"
-      when: not compose_file.stat.exists and compose_file_search.matched > 0
-      tags: [ric, docker]
-    
     - name: Create directory for script logs
       file:
         path: /var/log/ric-setup
