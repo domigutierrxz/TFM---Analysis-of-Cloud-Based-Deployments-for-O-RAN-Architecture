@@ -153,7 +153,7 @@
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
 
-    # Script to run scenario-zerio
+    # Script to run scenario-zero
     - name: Create scenario-zero runner script
       copy:
         dest: "{{ base_dir }}/run-scenario-zero.sh"
@@ -167,7 +167,7 @@
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
 
-    # Instructions for the configuration of ns-O-RAN
+    # Instructions for the configuration of ns-O-RAN:
     - name: Create manual steps file
       copy:
         dest: "/home/{{ ansible_user }}/ns3-manual-steps.md"
@@ -235,7 +235,7 @@
     - name: Show completion and next steps
       debug:
         msg: |
-          The environment is prepared for NS-O-RAN in Azure.
+          The environment is prepared for ns-O-RAN in Azure.
           
           Due to the long build times for NS-3, we've created convenience scripts:
           - {{ base_dir }}/configure-ns3.sh - Configure and build NS-3
