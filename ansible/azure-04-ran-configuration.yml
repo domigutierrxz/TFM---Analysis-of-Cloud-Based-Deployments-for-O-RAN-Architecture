@@ -126,11 +126,6 @@
         e2term_ip: "{{ e2term_ip_encoded.content | b64decode | trim }}"
       when: e2term_ip_encoded is defined and e2term_ip_encoded.content is defined
 
-    - name: Set E2Term IP from hostvars if file fetch failed
-      set_fact:
-        e2term_ip: "{{ hostvars['ric-host']['e2term_ip'] | default('0.0.0.0') }}"
-      when: e2term_ip_encoded is not defined or e2term_ip_encoded.content is not defined
-
     - name: Show E2Term IP
       debug:
         msg: "E2Term IP is: {{ e2term_ip }}"
