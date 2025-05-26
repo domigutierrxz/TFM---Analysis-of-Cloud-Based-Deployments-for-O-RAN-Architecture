@@ -43,6 +43,10 @@
       WantedBy=multi-user.target
   notify:
     - Start node_exporter
+    
+- name: Reload systemd
+  systemd:
+    daemon_reload: yes
 
 - name: Ensure node_exporter is running and enabled
   systemd:
@@ -50,6 +54,3 @@
     state: started
     enabled: yes
 
-- name: Reload systemd
-  systemd:
-    daemon_reload: yes
