@@ -7,7 +7,7 @@ terraform/*.tfstate.*
 terraform/*.tfvars
 
 # ANSIBLE
-group_vars/all.yml
+ansible/group_vars/all.yml
 ansible/vault.yml
 ansible/secret_*.yml
 
